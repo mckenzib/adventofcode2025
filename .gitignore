@@ -1,0 +1,12 @@
+# Rust matches
+target/
+**/*.rs.bk
+
+# Python matches
+__pycache__/
+*.py[cod]
+
+# General
+.DS_Store
+.vscode/
+.idea/
