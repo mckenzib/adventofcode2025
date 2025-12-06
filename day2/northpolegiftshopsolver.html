@@ -1,0 +1,386 @@
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>North Pole Gift Shop - Database Fixer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        body {
+            background-color: #0f172a;
+            color: #a5f3fc;
+            font-family: 'VT323', monospace;
+        }
+
+        .crt-overlay {
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+
+        .glow-text {
+            text-shadow: 0 0 5px #22d3ee, 0 0 10px #22d3ee;
+        }
+
+        /* Custom scrollbar for textarea */
+        textarea::-webkit-scrollbar {
+            width: 10px;
+            background-color: #1e293b;
+        }
+
+        textarea::-webkit-scrollbar-thumb {
+            background-color: #0891b2;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+
+<body class="h-screen w-full overflow-hidden flex flex-col relative">
+
+    <!-- Header -->
+    <header class="p-4 border-b border-cyan-800 bg-slate-900 z-10 flex justify-between items-center shadow-lg">
+        <div>
+            <h1 class="text-3xl glow-text">NORTH POLE SYSTEMS <span class="text-xs align-top opacity-70">v2.1</span>
+            </h1>
+            <p class="text-cyan-600 text-lg">Gift Shop Database Integrity Check (Enhanced)</p>
+        </div>
+        <div class="text-right hidden sm:block">
+            <div id="status-indicator" class="inline-block w-3 h-3 rounded-full bg-red-500 mr-2 animate-pulse"></div>
+            <span id="system-status">SYSTEM IDLE</span>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col md:flex-row relative z-10">
+
+        <!-- Input Panel -->
+        <section
+            class="w-full md:w-1/3 p-4 bg-slate-900/90 border-r border-cyan-800 flex flex-col gap-4 shadow-xl z-20">
+            <div class="flex-1 flex flex-col">
+                <label class="text-xl mb-2 text-cyan-400">>> INPUT_RANGES</label>
+                <textarea id="inputData"
+                    class="flex-1 bg-slate-800 border border-cyan-700 text-cyan-300 p-3 font-mono text-lg resize-none focus:outline-none focus:border-cyan-400 rounded transition-colors"
+                    placeholder="Paste puzzle input here...">11-22,95-115,998-1012,1188511880-1188511890,222220-222224,
+1698522-1698528,446443-446449,38593856-38593862,565653-565659,
+824824821-824824827,2121212118-2121212124</textarea>
+            </div>
+
+            <button onclick="runSolver()" id="scanBtn"
+                class="bg-cyan-900 hover:bg-cyan-700 text-cyan-100 text-2xl py-3 px-6 rounded border border-cyan-500 shadow-[0_0_15px_rgba(8,145,178,0.5)] transition-all hover:scale-[1.02] active:scale-95 uppercase tracking-widest">
+                Initiate Deep Scan
+            </button>
+
+            <div class="bg-slate-800 p-4 rounded border border-cyan-800 min-h-[120px]">
+                <h3 class="text-gray-400 border-b border-gray-600 mb-2 pb-1">SCAN RESULTS</h3>
+                <div class="flex justify-between items-end">
+                    <span class="text-lg">TOTAL SUM:</span>
+                    <span id="resultDisplay" class="text-4xl glow-text text-white">0</span>
+                </div>
+                <div class="mt-2 text-sm text-cyan-500">
+                    IDs Found: <span id="countDisplay">0</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Canvas Container -->
+        <section class="flex-1 relative bg-black overflow-hidden flex justify-center items-center">
+            <canvas id="vizCanvas" class="absolute inset-0"></canvas>
+
+            <!-- CRT Scanlines Overlay -->
+            <div class="absolute inset-0 crt-overlay pointer-events-none"></div>
+
+            <!-- Floating Log for discovered items -->
+            <div id="logOverlay"
+                class="absolute top-4 right-4 w-64 h-full pointer-events-none overflow-hidden flex flex-col items-end gap-1 opacity-80 font-mono text-sm">
+                <!-- Log items injected via JS -->
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // --- Core Logic ---
+
+        const canvas = document.getElementById('vizCanvas');
+        const ctx = canvas.getContext('2d');
+        const resultDisplay = document.getElementById('resultDisplay');
+        const countDisplay = document.getElementById('countDisplay');
+        const statusIndicator = document.getElementById('status-indicator');
+        const systemStatus = document.getElementById('system-status');
+        const logOverlay = document.getElementById('logOverlay');
+
+        let animationId;
+        let particles = [];
+        let ranges = [];
+        let foundIds = [];
+        let isScanning = false;
+
+        // Canvas Setup
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.offsetWidth;
+            canvas.height = canvas.parentElement.offsetHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // 1. Parser
+        function parseInput(input) {
+            const rangeStrings = input.replace(/\n/g, '').split(',');
+            const resultRanges = [];
+            let maxVal = 0;
+
+            for (let rStr of rangeStrings) {
+                if (!rStr.trim()) continue;
+                const parts = rStr.split('-');
+                if (parts.length === 2) {
+                    const start = parseInt(parts[0]);
+                    const end = parseInt(parts[1]);
+                    if (!isNaN(start) && !isNaN(end)) {
+                        resultRanges.push({ start, end });
+                        if (end > maxVal) maxVal = end;
+                    }
+                }
+            }
+            return { ranges: resultRanges, maxVal };
+        }
+
+        // 2. Generator
+        // Updated for Part 2: Handles any repetition count >= 2
+        function generateInvalidIds(max) {
+            const uniqueIds = new Set();
+            let base = 1;
+
+            while (true) {
+                const s = base.toString();
+                // Check if the minimal repetition (2x) exceeds max
+                if (parseInt(s + s) > max) break;
+
+                let k = 2;
+                while (true) {
+                    const pattern = s.repeat(k);
+                    const val = parseInt(pattern);
+
+                    if (val > max) break;
+
+                    uniqueIds.add(val);
+                    k++;
+                }
+                base++;
+            }
+            return uniqueIds;
+        }
+
+        // 3. Main Solver
+        function runSolver() {
+            const inputData = document.getElementById('inputData').value;
+
+            // UI Reset
+            particles = [];
+            foundIds = [];
+            logOverlay.innerHTML = '';
+            resultDisplay.innerText = "CALCULATING...";
+            statusIndicator.classList.remove('bg-red-500');
+            statusIndicator.classList.add('bg-green-500');
+            systemStatus.innerText = "DEEP SCANNING...";
+            isScanning = true;
+
+            // Parsing
+            const { ranges: parsedRanges, maxVal } = parseInput(inputData);
+            ranges = parsedRanges;
+
+            // Logic Processing
+            let totalSum = 0;
+
+            // Generate all unique candidates first (Part 2 logic)
+            const allCandidates = generateInvalidIds(maxVal);
+
+            // Convert Set to Array and sort for consistent visualization order
+            const sortedCandidates = Array.from(allCandidates).sort((a, b) => a - b);
+
+            for (let invalidId of sortedCandidates) {
+                // Check if this ID is in any range
+                let found = false;
+                for (let r of ranges) {
+                    if (invalidId >= r.start && invalidId <= r.end) {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (found) {
+                    totalSum += invalidId;
+                    foundIds.push(invalidId);
+                }
+            }
+
+            // Start Animation sequence with results
+            startAnimation(totalSum);
+        }
+
+        // --- Visualization Engine ---
+
+        class Particle {
+            constructor(x, y, text, type) {
+                this.x = x;
+                this.y = y;
+                this.text = text;
+                this.type = type; // 'noise' or 'found'
+                this.size = type === 'found' ? 24 : 14;
+                this.color = type === 'found' ? '#22d3ee' : '#1e293b';
+
+                // Physics
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = type === 'found' ? -2 : (Math.random() * 2 + 1);
+                this.life = 1.0;
+                this.decay = type === 'found' ? 0.005 : 0.02;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life -= this.decay;
+
+                if (this.type === 'found') {
+                    this.size *= 1.01; // Grow slightly
+                }
+            }
+
+            draw(ctx) {
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.font = `${this.size}px 'VT323'`;
+                ctx.fillStyle = this.color;
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        function spawnLogItem(id) {
+            const div = document.createElement('div');
+            div.className = "bg-cyan-900/30 text-cyan-300 border-r-2 border-cyan-500 px-2 py-1 mb-1 animate-pulse";
+            div.innerText = `>> DETECTED: ${id}`;
+            logOverlay.insertBefore(div, logOverlay.firstChild);
+            if (logOverlay.children.length > 15) {
+                logOverlay.removeChild(logOverlay.lastChild);
+            }
+        }
+
+        function startAnimation(finalSum) {
+            if (animationId) cancelAnimationFrame(animationId);
+
+            let foundIndex = 0;
+            let currentDisplaySum = 0;
+            // Speed up if there are many items
+            let framesPerSpawn = foundIds.length > 100 ? 1 : 10;
+            let frameCount = 0;
+
+            function animate() {
+                // 1. Clear background (trail effect)
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.3)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // 2. Draw Scanner Line
+                const scanY = (Date.now() / 5) % canvas.height;
+                ctx.beginPath();
+                ctx.moveTo(0, scanY);
+                ctx.lineTo(canvas.width, scanY);
+                ctx.strokeStyle = '#0891b2';
+                ctx.lineWidth = 2;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#0891b2';
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                // 3. Background Matrix Noise (falling numbers)
+                if (Math.random() < 0.3) {
+                    particles.push(new Particle(
+                        Math.random() * canvas.width,
+                        0,
+                        Math.floor(Math.random() * 100000).toString(),
+                        'noise'
+                    ));
+                }
+
+                // 4. Reveal Found IDs
+                frameCount++;
+                if (foundIndex < foundIds.length && frameCount % framesPerSpawn === 0) {
+                    const id = foundIds[foundIndex];
+
+                    // Spawn a "Found" particle at random center location
+                    const startX = canvas.width / 2 + (Math.random() - 0.5) * 200;
+                    const startY = canvas.height / 2 + (Math.random() - 0.5) * 200;
+
+                    particles.push(new Particle(startX, startY, id.toString(), 'found'));
+                    spawnLogItem(id);
+
+                    // Update Sum Display smoothly-ish
+                    currentDisplaySum += id; // Simple addition for display flow
+
+                    foundIndex++;
+                }
+
+                // 5. Update and Draw Particles
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    let p = particles[i];
+                    p.update();
+                    p.draw(ctx);
+                    if (p.life <= 0) {
+                        particles.splice(i, 1);
+                    }
+                }
+
+                // Check completion
+                if (foundIndex >= foundIds.length && particles.filter(p => p.type === 'found').length === 0) {
+                    // Animation settled
+                    resultDisplay.innerText = finalSum.toString(); // Ensure exact final sum
+                    countDisplay.innerText = foundIds.length;
+                    systemStatus.innerText = "SCAN COMPLETE";
+                    statusIndicator.classList.remove('bg-green-500');
+                    statusIndicator.classList.add('bg-red-500'); // Back to standby
+                    isScanning = false;
+                } else {
+                    // Update running sum during animation
+                    if (foundIndex < foundIds.length) {
+                        // Rough approximation during rapid fire, explicit set at end
+                        resultDisplay.innerText = currentDisplaySum.toString();
+                        countDisplay.innerText = foundIndex;
+                    }
+                    animationId = requestAnimationFrame(animate);
+                }
+            }
+
+            animate();
+        }
+
+        // Initial subtle background animation
+        function idleAnimation() {
+            if (isScanning) return;
+
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (Math.random() < 0.1) {
+                particles.push(new Particle(
+                    Math.random() * canvas.width,
+                    -20,
+                    Math.floor(Math.random() * 9).toString(),
+                    'noise'
+                ));
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.update();
+                p.draw(ctx);
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            if (!isScanning) requestAnimationFrame(idleAnimation);
+        }
+
+        idleAnimation();
+
+    </script>
+</body>
+
+</html>
