@@ -2,6 +2,14 @@
 
 This repository contains my solutions for the [Advent of Code](https://adventofcode.com/) challenges.
 
+```text
+     *
+    / \
+   /o  \
+  /     \
+ /__   __\
+    | |
+```
 ## Solutions
 
 | Day | Title | Language | Solution Path |
@@ -15,11 +23,4 @@ This repository contains my solutions for the [Advent of Code](https://adventofc
 | 10 | Factory | React | [Day 10 Solution](day10/) |
 | 11 | Reactor | Python | [Day 11 Solution](day11/) |
 
-```text
-     *
-    / \
-   /o  \
-  /     \
- /__   __\
-    | |
-```
+
