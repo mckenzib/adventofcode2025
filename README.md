@@ -11,6 +11,8 @@ This repository contains my solutions for the [Advent of Code](https://adventofc
 | 6 | Trash Compactor | Python | [Day 6 Solution](day6/) |
 | 7 | Laboratories | Go | [Day 7 Solution](day7/) |
 | 8 | Playground | Java | [Day 8 Solution](day8/) |
+| 9 | Movie Theater | Python | [Day 9 Solution](day9/) |
+| 10 | Factory | React | [Day 10 Solution](day10/) |
 
 ```text
      *
