@@ -13,6 +13,7 @@ This repository contains my solutions for the [Advent of Code](https://adventofc
 | 8 | Playground | Java | [Day 8 Solution](day8/) |
 | 9 | Movie Theater | Python | [Day 9 Solution](day9/) |
 | 10 | Factory | React | [Day 10 Solution](day10/) |
+| 11 | Reactor | Python | [Day 11 Solution](day11/) |
 
 ```text
      *
